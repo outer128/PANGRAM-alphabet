@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アルファベット除外検索</title>
+<style>
+  body {
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #333;
+  }
+  .grid-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  /* アルファベット26文字用に7列のグリッドに変更 */
+  #alphabet-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 45px);
+    gap: 6px;
+  }
+  .btn {
+    width: 45px;
+    height: 45px;
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+    border: 2px solid #ccc;
+    background-color: #fff;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: 0.1s;
+    text-transform: uppercase;
+  }
+  .btn.active {
+    background-color: #000;
+    color: white;
+    border-color: #000;
+  }
+  .btn:active {
+    transform: scale(0.95);
+  }
+  .control-panel {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+    padding: 10px;
+    border-top: 1px solid #eee;
+  }
+  #reset-btn {
+    padding: 10px 30px;
+    font-size: 1em;
+    cursor: pointer;
+    background-color: #666;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    transition: background-color 0.2s;
+  }
+  #reset-btn:hover {
+    background-color: #444;
+  }
+  .options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+  .option-item {
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f0f0f0;
+    padding: 8px 15px;
+    border-radius: 20px;
+    width: fit-content;
+    user-select: none;
+  }
+  .option-item input, .option-item select {
+    cursor: pointer;
+  }
+  select {
+    padding: 2px 5px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+  #result-info {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    font-weight: bold;
+  }
+  #word-list {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+  }
+  .word-item {
+    padding: 4px 0;
+    border-bottom: 1px dashed #eee;
+    font-size: 1.1em;
+  }
+</style>
+</head>
+<body>
+
+<h2>アルファベット除外検索</h2>
+<p>ボタンを押すと、そのアルファベットを<strong>含まない</strong>英単語のみを抽出します。（複数選択可能）</p>
+
+<div class="grid-container">
+  <div id="alphabet-grid"></div>
+</div>
+
+<div class="control-panel">
+  <button id="reset-btn">選択をすべてリセット</button>
+</div>
+
+<div id="result-info">結果: <span id="result-count">0</span>件</div>
+
+<div class="options-container">
+  <div style="margin-bottom: 5px;">
+    <label class="option-item">
+      <input type="checkbox" id="random-toggle"> 結果をランダムな順で表示する
+    </label>
+  </div>
+
+  <div class="option-item">
+    <select id="length-filter">
+      <option value="all">すべて</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10</option>
+      <option value="11">11</option>
+      <option value="12">12</option>
+    </select>
+    文字の単語を表示する
+  </div>
+</div>
+  
+<div id="word-list">辞書ファイル（2000.txt）を読み込み中...</div>
+
+<script>
+  // アルファベットの配列 (A-Z)
+  const alphabetList = [
+    'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u',
+    'v', 'w', 'x', 'y', 'z'
+  ];
+
+  const excludedLetters = new Set();
+  let dictionary = [];
+
+  async function loadDictionary() {
+    try {
+      // 添付された英単語テキストファイルを読み込む
+      const response = await fetch('2000.txt');
+      if (!response.ok) throw new Error('Network response was not ok');
+      
+      const text = await response.text();
+      
+      dictionary = text.split(/\r?\n/)
+        .map(w => w.trim())
+        // 空行や、ファイル先頭のゴミデータ（等）を除去
+        .filter(w => w.length > 0 && !w.startsWith('['));
+      
+      updateWordList();
+    } catch (error) {
+      document.getElementById('word-list').textContent = '辞書の読み込みに失敗しました。「2000.txt」が同じフォルダにあるか確認してください。';
+      console.error('Fetch error:', error);
+    }
+  }
+
+  function createGrid() {
+    const grid = document.getElementById('alphabet-grid');
+    alphabetList.forEach(letter => {
+      const div = document.createElement('div');
+      div.className = 'btn';
+      div.textContent = letter;
+      div.onclick = () => {
+        div.classList.toggle('active');
+        if (excludedLetters.has(letter)) {
+          excludedLetters.delete(letter);
+        } else {
+          excludedLetters.add(letter);
+        }
+        updateWordList();
+      };
+      grid.appendChild(div);
+    });
+  }
+
+  document.getElementById('reset-btn').onclick = () => {
+    excludedLetters.clear();
+    document.querySelectorAll('.btn.active').forEach(btn => btn.classList.remove('active'));
+    updateWordList();
+  };
+
+  // 即時反映のためのイベントリスナー
+  document.getElementById('random-toggle').onchange = () => updateWordList();
+  document.getElementById('length-filter').onchange = () => updateWordList();
+
+  // 配列をシャッフルする関数
+  function shuffleArray(array) {
+    const clone = [...array];
+    for (let i = clone.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      let temp = clone[i];
+      clone[i] = clone[j];
+      clone[j] = temp;
+    }
+    return clone;
+  }
+
+  function updateWordList() {
+    const listContainer = document.getElementById('word-list');
+    const countContainer = document.getElementById('result-count');
+    const isRandom = document.getElementById('random-toggle').checked;
+    const lengthVal = document.getElementById('length-filter').value;
+    
+    listContainer.innerHTML = '';
+
+    if (dictionary.length === 0) {
+      listContainer.textContent = 'データがありません。';
+      countContainer.textContent = '0';
+      return;
+    }
+
+    // フィルタリング
+    let filtered = dictionary.filter(word => {
+      // 大文字・小文字を区別せずに判定するため小文字に変換
+      const lowerWord = word.toLowerCase();
+
+      // 除外文字のチェック
+      for (const letter of excludedLetters) {
+        if (lowerWord.includes(letter)) return false;
+      }
+      
+      // 文字数のチェック
+      if (lengthVal !== 'all') {
+        if (word.length !== parseInt(lengthVal)) return false;
+      }
+      
+      return true;
+    });
+
+    // シャッフル
+    if (isRandom && filtered.length > 0) {
+      filtered = shuffleArray(filtered);
+    }
+
+    countContainer.textContent = filtered.length.toLocaleString();
+
+    const fragment = document.createDocumentFragment();
+    const displayLimit = Math.min(filtered.length, 2000); 
+    
+    for (let i = 0; i < displayLimit; i++) {
+      const div = document.createElement('div');
+      div.className = 'word-item';
+      div.textContent = filtered[i];
+      fragment.appendChild(div);
+    }
+    
+    listContainer.appendChild(fragment);
+    
+    if (filtered.length > displayLimit) {
+      const moreMsg = document.createElement('div');
+      moreMsg.className = 'word-item';
+      moreMsg.textContent = `...他 ${filtered.length - displayLimit} 件（表示上限2000件）`;
+      moreMsg.style.color = '#888';
+      listContainer.appendChild(moreMsg);
+    }
+  }
+
+  createGrid();
+  loadDictionary();
+</script>
+
+</body>
+</html>
